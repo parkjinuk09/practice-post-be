@@ -1,0 +1,57 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: board-mysql
+
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+    ports:
+      - "${MYSQL_PORT}:3306"
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u${MYSQL_USER} -p${MYSQL_PASSWORD}"
+        ]
+      interval: 10s   # 10초 마다 상태 검사
+      timeout: 5s     # 5초 내 응답 없으면 실패 처리
+      retries: 10     # 연속 10번 실패시 unhealthy로 판단
+      start_period: 20s
+
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: board-backend
+
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        # mysql이 실제로 쿼리를 받을 수 있는 상태가 되었을 때만 백엔드 컨테이너가 시작
+        condition: service_healthy
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+
+    ports:
+      - "${SERVER_PORT}:8080"
+
+
+volumes:
+  mysql-data:
